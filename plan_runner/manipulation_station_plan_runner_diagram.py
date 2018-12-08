@@ -65,10 +65,11 @@ class PlanScheduler(LeafSystem):
                     self.current_plan = self.kuka_plans_list.pop(0)
                     self.current_gripper_setpoint = self.gripper_setpoint_list.pop(0)
                 else:
-                    # There are no more available plans. Hold current position.
-                    self.current_plan = JointSpacePlanRelative(
-                        duration=3600., delta_q=np.zeros(7))
-                    print 'No more plans to run, holding current position...\n'
+                    return
+                #     # There are no more available plans. Hold current position.
+                #     self.current_plan = JointSpacePlanRelative(
+                #         duration=3600., delta_q=np.zeros(7))
+                #     print 'No more plans to run, holding current position...\n'
 
                 self.current_plan.start_time = t
                 self.current_plan_idx += 1
@@ -85,6 +86,27 @@ class PlanScheduler(LeafSystem):
     def _CalcForceLimitOutput(self, context, output):
         output.SetAtIndex(0, 15.0)
 
+    def AddPlans(self, kuka_plans, gripper_setpoint_list):
+        assert len(kuka_plans) == len(gripper_setpoint_list)
+
+        # Add a zero order hold to hold the current position of the robot
+        kuka_plans.insert(0, JointSpacePlanRelative(
+            duration=3.0, delta_q=np.zeros(7)))
+        gripper_setpoint_list.insert(0, 0.055)
+
+        if len(kuka_plans) > 1:
+            # Insert to the beginning of plan_list a plan that moves the robot from its
+            # current position to plan_list[0].traj.value(0)
+            kuka_plans.insert(1, JointSpacePlanGoToTarget(
+                duration=6.0, q_target=kuka_plans[1].traj.value(0).flatten()))
+            gripper_setpoint_list.insert(0, 0.055)
+
+        self.kuka_plans_list.extend(kuka_plans)
+        self.gripper_setpoint_list.extend(gripper_setpoint_list)
+
+        self.current_plan = None
+        self.current_gripper_setpoint = None
+        self.current_plan_idx = 0
 
 class IiwaController(LeafSystem):
     def __init__(self, station, control_period=0.005, print_period=0.5):
@@ -231,7 +253,4 @@ def CreateManipStationPlanRunnerDiagram(station, kuka_plans, gripper_setpoint_li
     plan_runner = builder.Build()
     plan_runner.set_name("Plan Runner")
 
-    return plan_runner
-
-
-
+    return plan_runner, plan_scheduler

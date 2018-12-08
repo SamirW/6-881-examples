@@ -158,7 +158,7 @@ def GenerateApproachHandlePlans(InterpolateOrientation, is_printing=True):
     p_WQ_start = p_WQ_home
     p_WQ_end = p_WC_handle
     qtraj_move_to_handle, q_knots_full = InverseKinPointwise(
-        p_WQ_start, p_WQ_end, duration=5.0,
+        p_WQ_start, p_WQ_end, duration=2.0,
         num_knot_points=num_knot_points, q_initial_guess=q_home_full,
         InterpolatePosition=InterpolateStraightLine,
         InterpolateOrientation=InterpolateOrientation,
@@ -269,7 +269,7 @@ def AddOpenDoorFullyPlans(plan_list, gripper_setpoint_list):
 
 # global variables used for all door-opening plans.
 handle_angle_end = np.pi/180*50
-open_door_duration = 10.
+open_door_duration = 4.
 
 def GenerateOpenLeftDoorPlansByTrajectory(is_printing=True):
     """
