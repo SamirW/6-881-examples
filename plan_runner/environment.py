@@ -87,6 +87,9 @@ class ManipStationEnvironment(object):
         self.context = self.diagram.GetMutableSubsystemContext(
             self.manip_station_sim.station, self.simulator.get_mutable_context())
 
+        self.left_hinge_joint = self.manip_station_sim.plant.GetJointByName("left_door_hinge")
+        self.right_hinge_joint = self.manip_station_sim.plant.GetJointByName("right_door_hinge")
+        
         # Set initial state of the robot
         self.reset()
         print("Environment loaded, ready to begin in 2 sec")
@@ -94,7 +97,7 @@ class ManipStationEnvironment(object):
 
     def step(self, action):
         assert len(action) == 8
-        next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.1)
+        next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.5)
 
         sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
         self.simulator.StepTo(sim_duration)
@@ -111,12 +114,10 @@ class ManipStationEnvironment(object):
         # set initial hinge angles of the cupboard.
         # setting hinge angle to exactly 0 or 90 degrees will result in intermittent contact
         # with small contact forces between the door and the cupboard body.
-        left_hinge_joint = self.manip_station_sim.plant.GetJointByName("left_door_hinge")
-        left_hinge_joint.set_angle(
+        self.left_hinge_joint.set_angle(
             context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=-0.001)
 
-        right_hinge_joint = self.manip_station_sim.plant.GetJointByName("right_door_hinge")
-        right_hinge_joint.set_angle(
+        self.right_hinge_joint.set_angle(
             context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=0.001)
 
         # set initial pose of the object
@@ -130,7 +131,10 @@ class ManipStationEnvironment(object):
         # Need to return observation
 
     def _getObservation(self):
-        return None
+        kuka_position = self.manip_station_sim.station.GetIiwaPosition(self.context)
+        left_door_hinge_position = self.left_hinge_joint.get_angle(
+            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context))
+        return np.append(kuka_position, left_door_hinge_position)
 
     def _getReward(self):
         return None

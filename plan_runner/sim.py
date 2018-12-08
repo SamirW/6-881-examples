@@ -1,5 +1,5 @@
 # import numpy as np
-# import time
+import time
 
 # from pydrake.common import FindResourceOrThrow
 
@@ -199,9 +199,9 @@
 
 from environment import ManipStationEnvironment
 
-env = ManipStationEnvironment(is_visualizing=True)
+env = ManipStationEnvironment(is_visualizing=False)
 
-q0_kuka = [0, 0, 0, -1.75, 0, 1.0, 0]
+# q0_kuka = [0, 0, 0, -1.75, 0, 1.0, 0]
 
 # from robot_plans import JointSpacePlanGoToTarget
 # 
@@ -215,16 +215,22 @@ q0_kuka = [0, 0, 0, -1.75, 0, 1.0, 0]
 # 
 # env.simulator.StepTo(4.0)
 
-action_1 = [0, 0, 0, 0, 0, 0.1, 0, 0.05]
-action_2 = [0, 0, 0, -0.1, 0, 0, 0, 0.05]
 
-for i in range(10):
-    env.step(action_1)
+action_1 = [0, 0, 0, 0, 0, -0.1, 0, 0.05]
+action_1_rev = [0,0,0,0,0,0.1,0,0.05]
+action_2 = [0, 0, 0, -0.1, 0, 0, 0, 0.05]
 
 env.reset()
 
-for i in range(10):
-    env.step(action_1)
+print("starting")
+
+time_start = time.time()
 
 for i in range(10):
-    env.step(action_2)
+    env.step(action_1)
+    env.step(action_1_rev)
+
+time_end = time.time()
+
+print(env.plan_scheduler.end_time)
+print(time_end - time_start)
