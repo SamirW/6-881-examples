@@ -9,6 +9,49 @@ from pydrake.systems.framework import Diagram, AbstractValue, LeafSystem, Diagra
 from plan_runner.robot_plans import *
 from plan_runner.open_left_door_plans import *
 
+class PlanSchedulerRL(LeafSystem):
+    def __init__(self, update_period=0.05):
+        LeafSystem.__init__(self)
+        self.set_name("Plan Scheduler")
+
+        self.current_plan = None
+        self.current_gripper_setpoint = None
+        self.end_time = 0
+
+        # Output ports for plans and gripper setpoints
+        self.iiwa_plan_output_port = self._DeclareAbstractOutputPort(
+            "iiwa_plan",
+            lambda: AbstractValue.Make(PlanBase()),
+            self._GetCurrentPlan)
+
+        self.hand_setpoint_output_port = \
+            self._DeclareVectorOutputPort(
+                "gripper_setpoint", BasicVector(1), self._CalcHandSetpointOutput)
+        self.gripper_force_limit_output_port = \
+            self._DeclareVectorOutputPort(
+                "force_limit", BasicVector(1), self._CalcForceLimitOutput)
+
+        self._DeclarePeriodicPublish(update_period)
+
+    def _GetCurrentPlan(self, context, y_data):
+        assert self.current_plan is not None
+        y_data.set_value(self.current_plan)
+
+    def _CalcHandSetpointOutput(self, context, y_data):
+        assert self.current_gripper_setpoint is not None
+        y = y_data.get_mutable_value()
+        # Get the ith finger control output
+        y[:] = self.current_gripper_setpoint
+
+    def _CalcForceLimitOutput(self, context, output):
+        output.SetAtIndex(0, 15.0)
+
+    def setNextPlan(self, kuka_plan, gripper_setpoint):
+        kuka_plan.start_time = self.end_time
+        self.current_plan = kuka_plan
+        self.current_gripper_setpoint = gripper_setpoint
+        self.end_time += kuka_plan.duration
+        return self.end_time
 
 class PlanScheduler(LeafSystem):
     def __init__(self, kuka_plans, gripper_setpoint_list, update_period=0.05):
@@ -16,7 +59,7 @@ class PlanScheduler(LeafSystem):
         self.set_name("Plan Scheduler")
 
         assert len(kuka_plans) == len(gripper_setpoint_list)
-
+    
         # Add a zero order hold to hold the current position of the robot
         kuka_plans.insert(0, JointSpacePlanRelative(
             duration=3.0, delta_q=np.zeros(7)))
@@ -53,6 +96,8 @@ class PlanScheduler(LeafSystem):
 
     def _GetCurrentPlan(self, context, y_data):
         t = context.get_time()
+        if len(self.kuka_plans_list) == 0:
+            return 
         if self.current_plan is None:
             # This is true only after the constructor is called and at the first control tick after the
             # simulator starts.
@@ -65,11 +110,10 @@ class PlanScheduler(LeafSystem):
                     self.current_plan = self.kuka_plans_list.pop(0)
                     self.current_gripper_setpoint = self.gripper_setpoint_list.pop(0)
                 else:
-                    return
-                #     # There are no more available plans. Hold current position.
-                #     self.current_plan = JointSpacePlanRelative(
-                #         duration=3600., delta_q=np.zeros(7))
-                #     print 'No more plans to run, holding current position...\n'
+                    # There are no more available plans. Hold current position.
+                    self.current_plan = JointSpacePlanRelative(
+                        duration=3600., delta_q=np.zeros(7))
+                    print 'No more plans to run, holding current position...\n'
 
                 self.current_plan.start_time = t
                 self.current_plan_idx += 1
@@ -86,27 +130,9 @@ class PlanScheduler(LeafSystem):
     def _CalcForceLimitOutput(self, context, output):
         output.SetAtIndex(0, 15.0)
 
-    def AddPlans(self, kuka_plans, gripper_setpoint_list):
-        assert len(kuka_plans) == len(gripper_setpoint_list)
-
-        # Add a zero order hold to hold the current position of the robot
-        kuka_plans.insert(0, JointSpacePlanRelative(
-            duration=3.0, delta_q=np.zeros(7)))
-        gripper_setpoint_list.insert(0, 0.055)
-
-        if len(kuka_plans) > 1:
-            # Insert to the beginning of plan_list a plan that moves the robot from its
-            # current position to plan_list[0].traj.value(0)
-            kuka_plans.insert(1, JointSpacePlanGoToTarget(
-                duration=6.0, q_target=kuka_plans[1].traj.value(0).flatten()))
-            gripper_setpoint_list.insert(0, 0.055)
-
-        self.kuka_plans_list.extend(kuka_plans)
-        self.gripper_setpoint_list.extend(gripper_setpoint_list)
-
-        self.current_plan = None
-        self.current_gripper_setpoint = None
-        self.current_plan_idx = 0
+    def SetCurrentPlan(self, kuka_plan, gripper_setpoint):
+        self.current_plan = kuka_plan
+        self.current_gripper_setpoint = gripper_setpoint
 
 class IiwaController(LeafSystem):
     def __init__(self, station, control_period=0.005, print_period=0.5):
@@ -223,18 +249,21 @@ class IiwaController(LeafSystem):
         y[self.nu:] = new_torque_command[:]
 
         # print current simulation time
-        if (self.print_period and
-                t - self.last_print_time >= self.print_period):
-            print "t: ", context.get_time()
-            self.last_print_time = context.get_time()
+        # if (self.print_period and
+        #         t - self.last_print_time >= self.print_period):
+        #     print "t: ", context.get_time()
+        #     self.last_print_time = context.get_time()
 
 
-def CreateManipStationPlanRunnerDiagram(station, kuka_plans, gripper_setpoint_list, print_period=1.0):
+def CreateManipStationPlanRunnerDiagram(station, kuka_plans, gripper_setpoint_list, print_period=1.0, rl_environment=False):
     builder = DiagramBuilder()
 
     iiwa_controller = IiwaController(station, print_period=print_period)
     builder.AddSystem(iiwa_controller)
-    plan_scheduler = PlanScheduler(kuka_plans, gripper_setpoint_list)
+    if rl_environment:
+        plan_scheduler = PlanSchedulerRL()
+    else:
+        plan_scheduler = PlanScheduler(kuka_plans, gripper_setpoint_list)
     builder.AddSystem(plan_scheduler)
 
     builder.Connect(plan_scheduler.iiwa_plan_output_port,

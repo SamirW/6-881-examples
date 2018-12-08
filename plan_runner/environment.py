@@ -2,25 +2,16 @@ import numpy as np
 import time
 
 from pydrake.common import FindResourceOrThrow
-
-from plan_runner.manipulation_station_simulator import ManipulationStationSimulator
-from plan_runner.manipulation_station_plan_runner import *
-from plan_runner.open_left_door import (GenerateOpenLeftDoorPlansByTrajectory,
-                                        GenerateOpenLeftDoorPlansByImpedanceOrPosition,)
-
-from pydrake.examples.manipulation_station import (ManipulationStation,
-                                    ManipulationStationHardwareInterface)
 from pydrake.geometry import SceneGraph
-from pydrake.multibody.multibody_tree.parsing import AddModelFromSdfFile
 from pydrake.systems.framework import DiagramBuilder
 from pydrake.systems.analysis import Simulator
-from pydrake.common.eigen_geometry import Isometry3
-from pydrake.systems.primitives import Demultiplexer, LogOutput
+from pydrake.systems.primitives import Demultiplexer
 from underactuated.meshcat_visualizer import MeshcatVisualizer
 
-from plan_runner.manipulation_station_plan_runner import ManipStationPlanRunner
 from plan_runner.manipulation_station_plan_runner_diagram import CreateManipStationPlanRunnerDiagram
+from plan_runner.manipulation_station_simulator import ManipulationStationSimulator
 from plan_runner.plan_utils import *
+from robot_plans import JointSpacePlanRelative
 
 object_file_path = FindResourceOrThrow(
     "drake/examples/manipulation_station/models/061_foam_brick.sdf")
@@ -39,7 +30,8 @@ class ManipStationEnvironment(object):
         plan_runner, self.plan_scheduler = CreateManipStationPlanRunnerDiagram(
             station=self.manip_station_sim.station,
             kuka_plans=[],
-            gripper_setpoint_list=[])
+            gripper_setpoint_list=[],
+            rl_environment=True)
         self.manip_station_sim.plan_runner = plan_runner
 
         # Create builder and add systems
@@ -81,6 +73,7 @@ class ManipStationEnvironment(object):
         # Build diagram
         self.diagram = builder.Build()
         if is_visualizing:
+            print("Setting up visualizer...")
             viz.load()
             time.sleep(2.0)
 
@@ -96,9 +89,17 @@ class ManipStationEnvironment(object):
 
         # Set initial state of the robot
         self.reset()
+        print("Environment loaded, ready to begin in 2 sec")
+        time.sleep(2.0)
 
     def step(self, action):
-        pass
+        assert len(action) == 8
+        next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.1)
+
+        sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
+        self.simulator.StepTo(sim_duration)
+
+        return self._getObservation()
 
     def reset(self):
         # set initial state of the robot
@@ -126,5 +127,10 @@ class ManipStationEnvironment(object):
 
         self.simulator.Initialize()
 
-    def seed(self, seed=1):
-        np.random.seed(seed)
+        # Need to return observation
+
+    def _getObservation(self):
+        return None
+
+    def _getReward(self):
+        return None
