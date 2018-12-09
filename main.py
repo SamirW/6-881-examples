@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import gym
+# import gym
 import argparse
 import os
 
@@ -8,7 +8,7 @@ import utils
 import TD3
 import OurDDPG
 import DDPG
-
+from plan_runner.environment import ManipStationEnvironment
 
 # Runs policy for X episodes and returns average reward
 def evaluate_policy(policy, eval_episodes=10):
@@ -33,7 +33,7 @@ if __name__ == "__main__":
 	
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--policy_name", default="TD3")					# Policy name
-	parser.add_argument("--env_name", default="HalfCheetah-v1")			# OpenAI gym environment name
+	# parser.add_argument("--env_name", default="HalfCheetah-v1")			# OpenAI gym environment name
 	parser.add_argument("--seed", default=0, type=int)					# Sets Gym, PyTorch and Numpy seeds
 	parser.add_argument("--start_timesteps", default=1e4, type=int)		# How many time steps purely random policy is run for
 	parser.add_argument("--eval_freq", default=5e3, type=float)			# How often (time steps) we evaluate
@@ -48,6 +48,8 @@ if __name__ == "__main__":
 	parser.add_argument("--policy_freq", default=2, type=int)			# Frequency of delayed policy updates
 	args = parser.parse_args()
 
+	args.env_name = "ManipStation"
+
 	file_name = "%s_%s_%s" % (args.policy_name, args.env_name, str(args.seed))
 	print("---------------------------------------")
 	print("Settings: %s" % (file_name))
@@ -58,7 +60,9 @@ if __name__ == "__main__":
 	if args.save_models and not os.path.exists("./pytorch_models"):
 		os.makedirs("./pytorch_models")
 
-	env = gym.make(args.env_name)
+	# env = gym.make(args.env_name)
+
+	env = ManipStationEnvironment(is_visualizing=True)
 
 	# Set seeds
 	env.seed(args.seed)
@@ -68,6 +72,10 @@ if __name__ == "__main__":
 	state_dim = env.observation_space.shape[0]
 	action_dim = env.action_space.shape[0] 
 	max_action = float(env.action_space.high[0])
+
+	state_dim = env.state_dim
+	action_dim = env.action_dim
+	max_action = env.max_action
 
 	# Initialize policy
 	if args.policy_name == "TD3": policy = TD3.TD3(state_dim, action_dim, max_action)

@@ -13,6 +13,8 @@ from plan_runner.manipulation_station_simulator import ManipulationStationSimula
 from plan_runner.plan_utils import *
 from robot_plans import JointSpacePlanRelative
 
+from env_utils import *
+
 object_file_path = FindResourceOrThrow(
     "drake/examples/manipulation_station/models/061_foam_brick.sdf")
 q0_kuka = [0, 0, 0, -1.75, 0, 1.0, 0]
@@ -93,6 +95,12 @@ class ManipStationEnvironment(object):
         # Set initial state of the robot
         self.reset()
 
+        # Properties for RL
+        max_action = np.ones(8) * 0.2
+        self.action_space = ActionSpace(low=-1*max_action, high=max_action)
+        self.state_dim = self.get_observation().shape[0]
+        self._max_episode_steps = 100
+
     def step(self, action):
         assert len(action) == 8
         next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.1)
@@ -127,6 +135,9 @@ class ManipStationEnvironment(object):
         self.simulator.Initialize()
 
         return self._getObservation()
+
+    def seed(self):
+        pass
 
     def _getObservation(self):
         kuka_position = self.manip_station_sim.station.GetIiwaPosition(self.context)

@@ -4,6 +4,8 @@ from pydrake.math import RollPitchYaw, RotationMatrix
 
 from plan_runner.manipulation_station_plan_runner import *
 
+import numpy as np
+
 # Define global variables used for IK.
 plant = station.get_mutable_multibody_plant()
 tree = plant.tree()
@@ -145,3 +147,13 @@ def InterpolatePitchAngle(i, num_knot_points):
         pitch_end = np.pi / 180 * 90
         pitch_angle = pitch_start + (pitch_end - pitch_start) / num_knot_points * i
         return RollPitchYaw(0, pitch_angle, 0).ToRotationMatrix()
+
+class ActionSpace(object):
+    def __init__(self, low=None, high=None, dtype=np.float32):
+        assert low.shape == high.shape
+        self.low = low.astype(dtype)
+        self.high = high.astype(dtype)
+        self.shape = self.low.shape
+
+    def sample(self):
+        return np.random.uniform(low=self.low, high=self.high)
