@@ -92,8 +92,6 @@ class ManipStationEnvironment(object):
         
         # Set initial state of the robot
         self.reset()
-        print("Environment loaded, ready to begin in 2 sec")
-        time.sleep(2.0)
 
     def step(self, action):
         assert len(action) == 8
@@ -102,7 +100,7 @@ class ManipStationEnvironment(object):
         sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
         self.simulator.StepTo(sim_duration)
 
-        return self._getObservation()
+        return self._getObservation(), self._getReward()
 
     def reset(self):
         # set initial state of the robot
@@ -128,7 +126,7 @@ class ManipStationEnvironment(object):
 
         self.simulator.Initialize()
 
-        # Need to return observation
+        return self._getObservation()
 
     def _getObservation(self):
         kuka_position = self.manip_station_sim.station.GetIiwaPosition(self.context)
@@ -137,4 +135,6 @@ class ManipStationEnvironment(object):
         return np.append(kuka_position, left_door_hinge_position)
 
     def _getReward(self):
-        return None
+        left_door_hinge_position = self.left_hinge_joint.get_angle(
+            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context))
+        return left_door_hinge_position
