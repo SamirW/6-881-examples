@@ -13,7 +13,7 @@ RUN apt-get update && yes "Y" \
 
 # Install some python deps
 RUN pip install --upgrade pip
-RUN pip install --upgrade graphviz numpy meshcat jupyter timeout-decorator sklearn
+RUN pip install --upgrade graphviz numpy meshcat jupyter timeout-decorator sklearn torchvision
 
 # Pull down Drake binaries
 RUN curl -o drake.tar.gz https://drake-packages.csail.mit.edu/drake/nightly/drake-${DRAKE_VERSION}-xenial.tar.gz && tar -xzf drake.tar.gz -C /opt

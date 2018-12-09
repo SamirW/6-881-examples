@@ -98,17 +98,27 @@ class ManipStationEnvironment(object):
         # Properties for RL
         max_action = np.ones(8) * 0.2
         self.action_space = ActionSpace(low=-1*max_action, high=max_action)
-        self.state_dim = self.get_observation().shape[0]
-        self._max_episode_steps = 100
+        self.state_dim = self._getObservation().shape[0]
+        self._episode_steps = 0
+        self._max_episode_steps = 75
 
     def step(self, action):
         assert len(action) == 8
         next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.1)
 
         sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
-        self.simulator.StepTo(sim_duration)
+        try:
+            self.simulator.StepTo(sim_duration)
+        except:
+            return None, -999, True, None
 
-        return self._getObservation(), self._getReward()
+        self._episode_steps += 1
+        if self._episode_steps == self._max_episode_steps:
+            done = True
+        else:
+            done = False
+
+        return self._getObservation(), self._getReward(), done, None
 
     def reset(self):
         # set initial state of the robot
@@ -121,7 +131,7 @@ class ManipStationEnvironment(object):
         # setting hinge angle to exactly 0 or 90 degrees will result in intermittent contact
         # with small contact forces between the door and the cupboard body.
         self.left_hinge_joint.set_angle(
-            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=-0.001)
+            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=-0.1)
 
         self.right_hinge_joint.set_angle(
             context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=0.001)
@@ -134,9 +144,11 @@ class ManipStationEnvironment(object):
 
         self.simulator.Initialize()
 
+        self._episode_steps = 0
+
         return self._getObservation()
 
-    def seed(self):
+    def seed(self, seed):
         pass
 
     def _getObservation(self):
@@ -148,4 +160,4 @@ class ManipStationEnvironment(object):
     def _getReward(self):
         left_door_hinge_position = self.left_hinge_joint.get_angle(
             context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context))
-        return left_door_hinge_position
+        return -1*(np.pi/2) - left_door_hinge_position

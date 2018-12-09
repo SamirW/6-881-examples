@@ -1,14 +1,15 @@
+from plan_runner.environment import ManipStationEnvironment
 import numpy as np
 import torch
+import time
 # import gym
 import argparse
 import os
 
 import utils
 import TD3
-import OurDDPG
-import DDPG
-from plan_runner.environment import ManipStationEnvironment
+# import OurDDPG
+# import DDPG
 
 # Runs policy for X episodes and returns average reward
 def evaluate_policy(policy, eval_episodes=10):
@@ -38,7 +39,8 @@ if __name__ == "__main__":
 	parser.add_argument("--start_timesteps", default=1e4, type=int)		# How many time steps purely random policy is run for
 	parser.add_argument("--eval_freq", default=5e3, type=float)			# How often (time steps) we evaluate
 	parser.add_argument("--max_timesteps", default=1e6, type=float)		# Max time steps to run environment for
-	parser.add_argument("--save_models", action="store_true")			# Whether or not models are saved
+	parser.add_argument("--save_models", action="store_true", 
+		default=True)													# Whether or not models are saved
 	parser.add_argument("--expl_noise", default=0.1, type=float)		# Std of Gaussian exploration noise
 	parser.add_argument("--batch_size", default=100, type=int)			# Batch size for both actor and critic
 	parser.add_argument("--discount", default=0.99, type=float)			# Discount factor
@@ -46,6 +48,7 @@ if __name__ == "__main__":
 	parser.add_argument("--policy_noise", default=0.2, type=float)		# Noise added to target policy during critic update
 	parser.add_argument("--noise_clip", default=0.5, type=float)		# Range to clip target policy noise
 	parser.add_argument("--policy_freq", default=2, type=int)			# Frequency of delayed policy updates
+	parser.add_argument("--visualize", action="store_true")				# Visualize in meshcat (requires meshcat-server)
 	args = parser.parse_args()
 
 	args.env_name = "ManipStation"
@@ -62,20 +65,23 @@ if __name__ == "__main__":
 
 	# env = gym.make(args.env_name)
 
-	env = ManipStationEnvironment(is_visualizing=True)
+	env = ManipStationEnvironment(is_visualizing=args.visualize)
+	print("Starting in 1 second")
+	time.sleep(1)
+	print("Starting")
 
 	# Set seeds
 	env.seed(args.seed)
 	torch.manual_seed(args.seed)
 	np.random.seed(args.seed)
 	
-	state_dim = env.observation_space.shape[0]
+	# state_dim = env.observation_space.shape[0]
 	action_dim = env.action_space.shape[0] 
 	max_action = float(env.action_space.high[0])
 
 	state_dim = env.state_dim
-	action_dim = env.action_dim
-	max_action = env.max_action
+	# action_dim = env.action_dim
+	# max_action = env.max_action
 
 	# Initialize policy
 	if args.policy_name == "TD3": policy = TD3.TD3(state_dim, action_dim, max_action)
@@ -85,17 +91,18 @@ if __name__ == "__main__":
 	replay_buffer = utils.ReplayBuffer()
 	
 	# Evaluate untrained policy
-	evaluations = [evaluate_policy(policy)] 
+	# evaluations = [evaluate_policy(policy)]
+	rewards = [] 
 
 	total_timesteps = 0
 	timesteps_since_eval = 0
 	episode_num = 0
+	episode_reward = 0
 	done = True 
 
 	while total_timesteps < args.max_timesteps:
-		
 		if done: 
-
+			rewards.append(episode_reward)
 			if total_timesteps != 0: 
 				print("Total T: %d Episode Num: %d Episode T: %d Reward: %f") % (total_timesteps, episode_num, episode_timesteps, episode_reward)
 				if args.policy_name == "TD3":
@@ -103,13 +110,13 @@ if __name__ == "__main__":
 				else: 
 					policy.train(replay_buffer, episode_timesteps, args.batch_size, args.discount, args.tau)
 			
-			# Evaluate episode
+			# Save episode
 			if timesteps_since_eval >= args.eval_freq:
 				timesteps_since_eval %= args.eval_freq
-				evaluations.append(evaluate_policy(policy))
+				# evaluations.append(evaluate_policy(policy))
 				
 				if args.save_models: policy.save(file_name, directory="./pytorch_models")
-				np.save("./results/%s" % (file_name), evaluations) 
+				np.save("./results/%s" % (file_name), rewards) 
 			
 			# Reset environment
 			obs = env.reset()
