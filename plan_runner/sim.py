@@ -201,32 +201,21 @@ from environment import ManipStationEnvironment
 
 env = ManipStationEnvironment(is_visualizing=False)
 
-# q0_kuka = [0, 0, 0, -1.75, 0, 1.0, 0]
-
-# from robot_plans import JointSpacePlanGoToTarget
-# 
-# new_plan = JointSpacePlanGoToTarget(q_target=q0_kuka, duration=2.0)
-# 
-# env.plan_scheduler.setPlan(new_plan, 0.05)
-# 
-# env.simulator.StepTo(2.0)
-# 
-# env.plan_scheduler.setPlan(new_plan, 0.0)
-# 
-# env.simulator.StepTo(4.0)
-
-
 action_1 = [0, 0, 0, 0, 0, -0.2, 0, 0.05]
-action_1_rev = [0,0,0,0,0,0.2,0,0.05]
+action_1_rev = [0,0,0,0,0,0.2,0,0.5]
 action_2 = [0, 0, 0, -0.1, 0, 0, 0, 0.05]
+close_grip = [0, 0, 0, 0, 0, 0, 0, 0]
 
 print("starting")
 
 time_start = time.time()
 
-for i in range(10):
-    env.step(action_1)
-    env.step(action_1_rev)
+for i in range(5):
+    for i in range(10):
+        obs, rew = env.step(action_1)
+
+    for i in range(10):
+        env.step(action_1_rev)
 
 time_end = time.time()
 

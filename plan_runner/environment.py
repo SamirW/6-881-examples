@@ -95,7 +95,7 @@ class ManipStationEnvironment(object):
 
     def step(self, action):
         assert len(action) == 8
-        next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.5)
+        next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.1)
 
         sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
         self.simulator.StepTo(sim_duration)
