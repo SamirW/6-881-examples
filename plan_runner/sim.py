@@ -199,7 +199,7 @@ import time
 
 from environment import ManipStationEnvironment
 
-env = ManipStationEnvironment(is_visualizing=True)
+env = ManipStationEnvironment(is_visualizing=False)
 
 action_1 = [0, 0, 0, 0, 0, -0.2, 0, 0.05]
 action_1_rev = [0,0,0,0,0,0.2,0,0.05]
