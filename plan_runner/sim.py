@@ -197,27 +197,16 @@ import time
 # plan_scheduler.AddPlans([plan_list2[2]], [gripper_setpoint_list2[2]])
 # simulator.StepTo(5)
 
+import numpy as np
 from environment import ManipStationEnvironment
 
-env = ManipStationEnvironment(is_visualizing=False)
+env = ManipStationEnvironment(is_visualizing=True)
 
-action_1 = [0, 0, 0, 0, 0, -0.2, 0, 0.05]
-action_1_rev = [0,0,0,0,0,0.2,0,0.5]
-action_2 = [0, 0, 0, -0.1, 0, 0, 0, 0.05]
-close_grip = [0, 0, 0, 0, 0, 0, 0, 0]
+action_1 = np.array([0.6, 0, 0.41, 4, 0.05])
+time.sleep(0.1)
+action_2 = np.array([0.5, 0, 0.41, 4, 0.05])
 
 print("starting")
 
-time_start = time.time()
-
-for i in range(5):
-    for i in range(10):
-        obs, rew = env.step(action_1)
-
-    for i in range(10):
-        env.step(action_1_rev)
-
-time_end = time.time()
-
-print(env.plan_scheduler.end_time)
-print(time_end - time_start)
+env.step(action_1)
+env.step(action_2)

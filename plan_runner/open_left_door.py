@@ -16,7 +16,6 @@ gripper_frame = plant.GetFrameByName("body", gripper_model)
 
 R_EEa = RotationMatrix(X_EEa.rotation())
 
-
 def GetKukaQKnots(q_knots):
     """
     q returned by IK consists of the configuration of all bodies in a MultibodyTree.

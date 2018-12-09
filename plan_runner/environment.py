@@ -13,9 +13,13 @@ from plan_runner.manipulation_station_simulator import ManipulationStationSimula
 from plan_runner.plan_utils import *
 from robot_plans import JointSpacePlanRelative
 
+from env_utils import *
+
 object_file_path = FindResourceOrThrow(
     "drake/examples/manipulation_station/models/061_foam_brick.sdf")
-q0_kuka = [0, 0, 0, -1.75, 0, 1.0, 0]
+p_WQ_home = np.array([0.5, 0, 0.41])
+q_home_full = GetHomeConfiguration()
+q_home_kuka = GetKukaQKnots(q_home_full)[0]
 
 class ManipStationEnvironment(object):
     def __init__(self, real_time_rate=0, is_visualizing=False):
@@ -84,27 +88,49 @@ class ManipStationEnvironment(object):
         self.simulator.set_publish_every_time_step(False)
         self.simulator.set_target_realtime_rate(real_time_rate)
 
+        # Store context and joints for observing the state
         self.context = self.diagram.GetMutableSubsystemContext(
             self.manip_station_sim.station, self.simulator.get_mutable_context())
 
         self.left_hinge_joint = self.manip_station_sim.plant.GetJointByName("left_door_hinge")
         self.right_hinge_joint = self.manip_station_sim.plant.GetJointByName("right_door_hinge")
         
+        # Store current conditions for IK
+        self.p_WQ = None
+        self.q_full = None
+
         # Set initial state of the robot
         self.reset()
 
     def step(self, action):
-        assert len(action) == 8
-        next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.1)
+        assert len(action) == 5
+        p_WQ_end = action[:3]
+        duration = action[3]
+        gripper_setpoint = action[4]
+        print("From {} to {}".format(self.p_WQ, p_WQ_end))
+        # Perform IK
+        q_traj, q_knots_full = InverseKinPointwise(
+            self.p_WQ, p_WQ_end, duration=duration,
+            num_knot_points=10, q_initial_guess=self.q_full,
+            InterpolatePosition=InterpolateStraightLine,
+            InterpolateOrientation=InterpolatePitchAngle,
+            position_tolerance=0.01,
+            is_printing=False)
 
-        sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
+        print("From {} to {}".format(q_knots_full[0], q_knots_full[-1]))
+        next_plan = JointSpacePlan(q_traj)
+        sim_duration = self.plan_scheduler.setNextPlan(next_plan, gripper_setpoint)
         self.simulator.StepTo(sim_duration)
+
+        # exit()
+        self.p_WQ = p_WQ_end
+        self.q_full = q_knots_full[-1]
 
         return self._getObservation(), self._getReward()
 
     def reset(self):
         # set initial state of the robot
-        self.manip_station_sim.station.SetIiwaPosition(q0_kuka, self.context)
+        self.manip_station_sim.station.SetIiwaPosition(q_home_kuka, self.context)
         self.manip_station_sim.station.SetIiwaVelocity(np.zeros(7), self.context)
         self.manip_station_sim.station.SetWsgPosition(0.05, self.context)
         self.manip_station_sim.station.SetWsgVelocity(0, self.context)
@@ -125,6 +151,10 @@ class ManipStationEnvironment(object):
                 self.manip_station_sim.X_WObject, self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context))
 
         self.simulator.Initialize()
+
+        # Store home WQ
+        self.p_WQ = p_WQ_home
+        self.q_full = q_home_full
 
         return self._getObservation()
 
