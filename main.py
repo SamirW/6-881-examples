@@ -40,6 +40,10 @@ parser.add_argument('--target_update_interval', type=int, default=1, metavar='N'
                     help='Value target update per no. of updates per step (default: 1)')
 parser.add_argument('--replay_size', type=int, default=1000000, metavar='N',
                     help='size of replay buffer (default: 10000000)')
+parser.add_argument('--save_freq', type=int, default=750,
+					help='how often to save model and rewards')
+parser.add_argument('--load', action='store_true',
+					help='load from previous model')
 args = parser.parse_args()
 
 # Environment
@@ -64,7 +68,18 @@ memory = ReplayMemory(args.replay_size)
 # Training Loop
 rewards = []
 total_numsteps = 0
+timesteps_since_save = 0
 updates = 0
+
+if args.load:
+	actor_path = 'models/sac_actor_{}'.format(args.seed)
+	critic_path = 'models/sac_critic_{}'.format(args.seed)
+	value_path = 'models/sac_value_{}'.format(args.seed)
+	agent.load_model(actor_path=actor_path,
+		critic_path=critic_path,
+		value_path=value_path)
+	total_numsteps = np.load('models/checkpoint_%d.npy' % args.seed)
+	results = list(np.load('models/results_%d.npy' % args.seed))
 
 for i_episode in itertools.count():
     state = env.reset()
@@ -92,6 +107,7 @@ for i_episode in itertools.count():
 
         state = next_state
         total_numsteps += 1
+        timesteps_since_save += 1
         episode_reward += reward
 
         if done:
@@ -99,6 +115,13 @@ for i_episode in itertools.count():
 
     if total_numsteps > args.num_steps:
         break
+
+    if timesteps_since_save >= args.save_freq: 
+    	timesteps_since_save %= args.save_freq
+
+    	agent.save_model(str(args.seed))
+    	np.save('models/checkpoint_%d' % args.seed, total_numsteps)
+    	np.save('models/results_%d' % args.seed, rewards)
 
     # writer.add_scalar('reward/train', episode_reward, i_episode)
     rewards.append(episode_reward)

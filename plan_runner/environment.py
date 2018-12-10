@@ -129,7 +129,7 @@ class ManipStationEnvironment(object):
             self.simulator.StepTo(sim_duration)
         except:
             self.reset_sim = True
-            return self._getObservation(), -999, True, None
+            return self._getObservation(), -50, True, None
 
         reward = self._getReward()
 
