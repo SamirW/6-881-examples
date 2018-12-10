@@ -132,13 +132,18 @@ class ManipStationEnvironment(object):
             self.reset_sim = True
             return self._getObservation(), -999, True, None
 
-        self._episode_steps += 1
-        if self._episode_steps == self._max_episode_steps:
+        reward = self._getReward()
+
+        if reward > -0.1:
             done = True
         else:
-            done = False
+            self._episode_steps += 1
+            if self._episode_steps == self._max_episode_steps:
+                done = True
+            else:
+                done = False
 
-        return self._getObservation(), self._getReward(), done, None
+        return self._getObservation(), reward, done, None
 
     def reset(self):
 
@@ -165,7 +170,7 @@ class ManipStationEnvironment(object):
             context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=np.pi/2-0.001)
 
         # set initial pose of the object
-        self.manip_station_sim.SetObjectTranslation(p_WQ_new+np.array([0.01,0,-0.022]))
+        # self.manip_station_sim.SetObjectTranslation(p_WQ_new+np.array([0.01,0,-0.022]))
         if self.manip_station_sim.object_base_link_name is not None:
             self.manip_station_sim.tree.SetFreeBodyPoseOrThrow(
                self.manip_station_sim.plant.GetBodyByName(self.manip_station_sim.object_base_link_name, self.manip_station_sim.object),
@@ -182,12 +187,6 @@ class ManipStationEnvironment(object):
         self.manip_station_sim.station.SetWsgPosition(0.02, self.context)
         self.manip_station_sim.station.SetWsgVelocity(0, self.context)
 
-        # if self.reset_sim:
-        #     print("Resetting")
-        #     new_integrator = self.simulator.reset_integrator(RungeKutta3Integrator(self.manip_station_sim.station, self.context))
-        #     new_integrator.set_maximum_step_size(0.1)
-        #     new_integrator.set_target_accuracy(0.0001)
-        #     self.reset_sim = False
         self.simulator.Initialize()
 
         self._episode_steps = 0
