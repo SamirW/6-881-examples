@@ -163,11 +163,11 @@ class SAC(object):
             os.makedirs('models/')
 
         if actor_path is None:
-            actor_path = "models/sac_actor_{}}".format(env_name)
+            actor_path = "models/sac_actor_{}".format(env_name)
         if critic_path is None:
-            critic_path = "models/sac_critic_{}}".format(env_name)
+            critic_path = "models/sac_critic_{}".format(env_name)
         if value_path is None:
-            value_path = "models/sac_value_{}}".format(env_name)
+            value_path = "models/sac_value_{}".format(env_name)
         print('Saving models to {}, {} and {}'.format(actor_path, critic_path, value_path))
         torch.save(self.value.state_dict(), value_path)
         torch.save(self.policy.state_dict(), actor_path)
