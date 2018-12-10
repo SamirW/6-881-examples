@@ -128,4 +128,6 @@ for i_episode in itertools.count():
     print("Episode: {}, total numsteps: {}, reward: {}, average reward: {}".format(i_episode, total_numsteps, np.round(rewards[-1],2),
                                                                                 np.round(np.mean(rewards[-100:]),2)))
 
-env.close()
+agent.save_model(str(args.seed))
+np.save('models/checkpoint_%d' % args.seed, total_numsteps)
+np.save('models/results_%d' % args.seed, rewards)
