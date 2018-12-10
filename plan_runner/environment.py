@@ -105,10 +105,8 @@ class ManipStationEnvironment(object):
         self.obj = self.manip_station_sim.plant.GetBodyByName(self.manip_station_sim.object_base_link_name, self.manip_station_sim.object)
 
         # Properties for RL
-        max_action = np.ones(8) * 0.1
-        max_action[-1] = 0.03
+        max_action = np.ones(7) * 0.1
         low_action = -1*max_action
-        low_action[-1] = 0
         self.action_space = ActionSpace(low=low_action, high=max_action)
         self.state_dim = self._getObservation().shape[0]
         self._episode_steps = 0
@@ -197,15 +195,9 @@ class ManipStationEnvironment(object):
 
     def _getObservation(self):
         kuka_position = self.manip_station_sim.station.GetIiwaPosition(self.context)
-        object_position = self.manip_station_sim.tree.EvalBodyPoseInWorld(
-            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context),
-            body=self.obj).translation()
-        return np.append(kuka_position, object_position)
+        return np.array(kuka_position)
 
     def _getReward(self):
-        # object_position = self.manip_station_sim.tree.EvalBodyPoseInWorld(
-        #     context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context),
-        #     body=self.obj).translation()
         gripper_pose = self.manip_station_sim.tree.CalcRelativeTransform(
             context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context),
             frame_A=self.manip_station_sim.world_frame,
