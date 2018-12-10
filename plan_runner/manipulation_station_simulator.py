@@ -48,6 +48,11 @@ class ManipulationStationSimulator:
         # Initial pose of the object
         self.X_WObject = X_WObject
 
+        # Frames
+        self.gripper_model = self.plant.GetModelInstanceByName("gripper")
+        self.world_frame = self.plant.world_frame()
+        self.gripper_frame = self.plant.GetFrameByName("body", self.gripper_model)
+
     def SetObjectTranslation(self, translation):
         self.X_WObject.set_translation(translation)
 

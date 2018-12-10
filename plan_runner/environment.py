@@ -4,7 +4,8 @@ import time
 from pydrake.common import FindResourceOrThrow
 from pydrake.geometry import SceneGraph
 from pydrake.systems.framework import DiagramBuilder
-from pydrake.systems.analysis import Simulator
+from pydrake.multibody.multibody_tree.math import SpatialVelocity
+from pydrake.systems.analysis import Simulator, RungeKutta3Integrator
 from pydrake.systems.primitives import Demultiplexer
 from underactuated.meshcat_visualizer import MeshcatVisualizer
 
@@ -94,27 +95,34 @@ class ManipStationEnvironment(object):
         # Goal for training
         self.goal_position = np.array([0.85, 0, 0.31])
 
+        # Object body
+        self.obj = self.manip_station_sim.plant.GetBodyByName(self.manip_station_sim.object_base_link_name, self.manip_station_sim.object)
+
         # Set initial state of the robot
+        self.reset_sim = False
         self.reset()
 
         # Properties for RL
-        max_action = np.ones(8) * 0.2
-        self.action_space = ActionSpace(low=-1*max_action, high=max_action)
+        max_action = np.ones(8) * 0.1
+        max_action[-1] = 0.03
+        low_action = -1*max_action
+        low_action[-1] = 0
+        self.action_space = ActionSpace(low=low_action, high=max_action)
         self.state_dim = self._getObservation().shape[0]
         self._episode_steps = 0
         self._max_episode_steps = 75
-        self.obj = self.manip_station_sim.plant.GetBodyByName(self.manip_station_sim.object_base_link_name, self.manip_station_sim.object)
 
     def step(self, action):
         assert len(action) == 8
-        next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.1)
+        next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.2)
 
         # sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
-        sim_duration = self.plan_scheduler.setNextPlan(next_plan, 0)
+        sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
 
         try:
             self.simulator.StepTo(sim_duration)
         except:
+            self.reset_sim = True
             return self._getObservation(), -999, True, None
 
         self._episode_steps += 1
@@ -128,10 +136,12 @@ class ManipStationEnvironment(object):
     def reset(self):
         while True:
             p_WQ_new = np.random.uniform(low=[0.05, -0.1, 0.5], high=[0.5, 0.1, 0.5])
+            # p_WQ_new = np.array([0.2, 0, 0.5])
             passed, q_home_full = GetConfiguration(p_WQ_new)
             if passed:
                 break
         q_home_kuka = GetKukaQKnots(q_home_full)[0]
+
 
         # set initial hinge angles of the cupboard.
         # setting hinge angle to exactly 0 or 90 degrees will result in intermittent contact
@@ -143,11 +153,16 @@ class ManipStationEnvironment(object):
             context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=np.pi/2-0.001)
 
         # set initial pose of the object
-        self.manip_station_sim.SetObjectTranslation(p_WQ_new+np.array([0.01,0,-0.022]))
+        # self.manip_station_sim.SetObjectTranslation(p_WQ_new+np.array([0.01,0,-0.022]))
         if self.manip_station_sim.object_base_link_name is not None:
             self.manip_station_sim.tree.SetFreeBodyPoseOrThrow(
                self.manip_station_sim.plant.GetBodyByName(self.manip_station_sim.object_base_link_name, self.manip_station_sim.object),
                 self.manip_station_sim.X_WObject, self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context))
+
+        if self.manip_station_sim.object_base_link_name is not None:
+            self.manip_station_sim.tree.SetFreeBodySpatialVelocityOrThrow(
+               self.manip_station_sim.plant.GetBodyByName(self.manip_station_sim.object_base_link_name, self.manip_station_sim.object),
+                SpatialVelocity(np.zeros(3), np.zeros(3)), self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context))
 
         # set initial state of the robot
         self.manip_station_sim.station.SetIiwaPosition(q_home_kuka, self.context)
@@ -155,6 +170,12 @@ class ManipStationEnvironment(object):
         self.manip_station_sim.station.SetWsgPosition(0.02, self.context)
         self.manip_station_sim.station.SetWsgVelocity(0, self.context)
 
+        if self.reset_sim:
+            print("Resetting")
+            new_integrator = self.simulator.reset_integrator(RungeKutta3Integrator(self.manip_station_sim.station, self.context))
+            new_integrator.set_maximum_step_size(0.1)
+            new_integrator.set_target_accuracy(0.0001)
+            self.reset_sim = False
         self.simulator.Initialize()
 
         self._episode_steps = 0
@@ -166,13 +187,18 @@ class ManipStationEnvironment(object):
 
     def _getObservation(self):
         kuka_position = self.manip_station_sim.station.GetIiwaPosition(self.context)
-        left_door_hinge_position = self.left_hinge_joint.get_angle(
-            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context))
-        return np.append(kuka_position, left_door_hinge_position)
-
-    def _getReward(self):
         object_position = self.manip_station_sim.tree.EvalBodyPoseInWorld(
             context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context),
             body=self.obj).translation()
-        dist = np.linalg.norm(self.goal_position-object_position)
+        return np.append(kuka_position, object_position)
+
+    def _getReward(self):
+        # object_position = self.manip_station_sim.tree.EvalBodyPoseInWorld(
+        #     context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context),
+        #     body=self.obj).translation()
+        gripper_pose = self.manip_station_sim.tree.CalcRelativeTransform(
+            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context),
+            frame_A=self.manip_station_sim.world_frame,
+            frame_B=self.manip_station_sim.gripper_frame).translation()
+        dist = np.linalg.norm(self.goal_position-gripper_pose)
         return -dist
