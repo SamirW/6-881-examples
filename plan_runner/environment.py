@@ -30,7 +30,7 @@ class ManipStationEnvironment(object):
     def build(self, real_time_rate=0, is_visualizing=False):
         # Create manipulation station simulator
         self.manip_station_sim = ManipulationStationSimulator(
-            time_step=2e-3,
+            time_step=5e-4,
             object_file_path=object_file_path,
             object_base_link_name="base_link",)
 
