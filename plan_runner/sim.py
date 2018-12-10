@@ -201,7 +201,7 @@ from environment import ManipStationEnvironment
 
 env = ManipStationEnvironment(is_visualizing=True)
 import numpy as np
-# action_1 = [0, 0, 0, 0, 0, -0.2, 0, 0.05]
+action_1 = [0, 0, 0, 0, 0, -0.2, 0, 0.02]
 action_1 = np.zeros(8)
 # action_1_rev = [0,0,0,0,0,0.2,0,0.05]
 # action_2 = [0, 0, 0, -0.1, 0, 0, 0, 0.05]

@@ -21,7 +21,13 @@ object_file_path = FindResourceOrThrow(
 
 class ManipStationEnvironment(object):
     def __init__(self, real_time_rate=0, is_visualizing=False):
+        # Store for continuity
+        self.is_visualizing = is_visualizing
+        self.real_time_rate = real_time_rate
 
+        self.build(real_time_rate=0, is_visualizing=is_visualizing)
+
+    def build(self, real_time_rate=0, is_visualizing=False):
         # Create manipulation station simulator
         self.manip_station_sim = ManipulationStationSimulator(
             time_step=2e-3,
@@ -98,10 +104,6 @@ class ManipStationEnvironment(object):
         # Object body
         self.obj = self.manip_station_sim.plant.GetBodyByName(self.manip_station_sim.object_base_link_name, self.manip_station_sim.object)
 
-        # Set initial state of the robot
-        self.reset_sim = False
-        self.reset()
-
         # Properties for RL
         max_action = np.ones(8) * 0.1
         max_action[-1] = 0.03
@@ -111,6 +113,11 @@ class ManipStationEnvironment(object):
         self.state_dim = self._getObservation().shape[0]
         self._episode_steps = 0
         self._max_episode_steps = 75
+        
+        # Set initial state of the robot
+        self.reset_sim = False
+        return self.reset()
+
 
     def step(self, action):
         assert len(action) == 8
@@ -134,6 +141,11 @@ class ManipStationEnvironment(object):
         return self._getObservation(), self._getReward(), done, None
 
     def reset(self):
+
+        if self.reset_sim:
+            print("Resetting")
+            return self.build(real_time_rate=self.real_time_rate, is_visualizing=self.is_visualizing)
+
         while True:
             p_WQ_new = np.random.uniform(low=[0.05, -0.1, 0.5], high=[0.5, 0.1, 0.5])
             # p_WQ_new = np.array([0.2, 0, 0.5])
@@ -153,7 +165,7 @@ class ManipStationEnvironment(object):
             context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=np.pi/2-0.001)
 
         # set initial pose of the object
-        # self.manip_station_sim.SetObjectTranslation(p_WQ_new+np.array([0.01,0,-0.022]))
+        self.manip_station_sim.SetObjectTranslation(p_WQ_new+np.array([0.01,0,-0.022]))
         if self.manip_station_sim.object_base_link_name is not None:
             self.manip_station_sim.tree.SetFreeBodyPoseOrThrow(
                self.manip_station_sim.plant.GetBodyByName(self.manip_station_sim.object_base_link_name, self.manip_station_sim.object),
@@ -170,12 +182,12 @@ class ManipStationEnvironment(object):
         self.manip_station_sim.station.SetWsgPosition(0.02, self.context)
         self.manip_station_sim.station.SetWsgVelocity(0, self.context)
 
-        if self.reset_sim:
-            print("Resetting")
-            new_integrator = self.simulator.reset_integrator(RungeKutta3Integrator(self.manip_station_sim.station, self.context))
-            new_integrator.set_maximum_step_size(0.1)
-            new_integrator.set_target_accuracy(0.0001)
-            self.reset_sim = False
+        # if self.reset_sim:
+        #     print("Resetting")
+        #     new_integrator = self.simulator.reset_integrator(RungeKutta3Integrator(self.manip_station_sim.station, self.context))
+        #     new_integrator.set_maximum_step_size(0.1)
+        #     new_integrator.set_target_accuracy(0.0001)
+        #     self.reset_sim = False
         self.simulator.Initialize()
 
         self._episode_steps = 0
