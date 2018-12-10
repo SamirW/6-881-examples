@@ -1,32 +1,28 @@
-import numpy as np
+import math
+import torch
 
-# Code based on: 
-# https://github.com/openai/baselines/blob/master/baselines/deepq/replay_buffer.py
+def create_log_gaussian(mean, log_std, t):
+    quadratic = -((0.5 * (t - mean) / (log_std.exp())).pow(2))
+    l = mean.shape
+    log_z = log_std
+    z = l[-1] * math.log(2 * math.pi)
+    log_p = quadratic.sum(dim=-1) - log_z.sum(dim=-1) - 0.5 * z
+    return log_p
 
-# Expects tuples of (state, next_state, action, reward, done)
-class ReplayBuffer(object):
-	def __init__(self, max_size=1e5):
-		self.storage = []
-		self.max_size = max_size
-		self.ptr = 0
+def logsumexp(inputs, dim=None, keepdim=False):
+    if dim is None:
+        inputs = inputs.view(-1)
+        dim = 0
+    s, _ = torch.max(inputs, dim=dim, keepdim=True)
+    outputs = s + (inputs - s).exp().sum(dim=dim, keepdim=True).log()
+    if not keepdim:
+        outputs = outputs.squeeze(dim)
+    return outputs
 
-	def add(self, data):
-		if len(self.storage) == self.max_size:
-			self.storage[int(self.ptr)] = data
-			self.ptr = (self.ptr + 1) % self.max_size
-		else:
-			self.storage.append(data)
+def soft_update(target, source, tau):
+    for target_param, param in zip(target.parameters(), source.parameters()):
+        target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
-	def sample(self, batch_size):
-		ind = np.random.randint(0, len(self.storage), size=batch_size)
-		x, y, u, r, d = [], [], [], [], []
-
-		for i in ind: 
-			X, Y, U, R, D = self.storage[i]
-			x.append(np.array(X, copy=False))
-			y.append(np.array(Y, copy=False))
-			u.append(np.array(U, copy=False))
-			r.append(np.array(R, copy=False))
-			d.append(np.array(D, copy=False))
-
-		return np.array(x), np.array(y), np.array(u), np.array(r).reshape(-1, 1), np.array(d).reshape(-1, 1)
+def hard_update(target, source):
+    for target_param, param in zip(target.parameters(), source.parameters()):
+        target_param.data.copy_(param.data)

@@ -1,179 +1,108 @@
 from plan_runner.environment import ManipStationEnvironment
-import numpy as np
-import torch
-import time
-# import gym
 import argparse
-import os
+import math
+# import gym
 
-import pickle 
-import utils
-import TD3
-# import OurDDPG
-# import DDPG
+import numpy as np
+import itertools
+import torch
+from sac import SAC
+# from tensorboardX import SummaryWriter
+# from normalized_actions import NormalizedActions
+from replay_memory import ReplayMemory
 
-# Runs policy for X episodes and returns average reward
-def evaluate_policy(policy, eval_episodes=10):
-    avg_reward = 0.
-    for _ in xrange(eval_episodes):
-        obs = env.reset()
-        done = False
-        while not done:
-            action = policy.select_action(np.array(obs))
-            obs, reward, done, _ = env.step(action)
-            avg_reward += reward
+parser = argparse.ArgumentParser(description='PyTorch REINFORCE example')
+parser.add_argument('--env-name', default="HalfCheetah-v2",
+                    help='name of the environment to run')
+parser.add_argument('--policy', default="Gaussian",
+                    help='algorithm to use: Gaussian | Deterministic')
+parser.add_argument('--eval', type=bool, default=False,
+                    help='Evaluate a policy (default:False)')
+parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
+                    help='discount factor for reward (default: 0.99)')
+parser.add_argument('--tau', type=float, default=0.005, metavar='G',
+                    help='target smoothing coefficient(tau) (default: 0.005)')
+parser.add_argument('--lr', type=float, default=0.0003, metavar='G',
+                    help='learning rate (default: 0.0003)')
+parser.add_argument('--alpha', type=float, default=0.2, metavar='G',
+                    help='Temperature parameter alpha determines the relative importance of the entropy term against the reward (default: 0.2)')
+parser.add_argument('--seed', type=int, default=543, metavar='N',
+                    help='random seed (default: 543)')
+parser.add_argument('--batch_size', type=int, default=256, metavar='N',
+                    help='batch size (default: 256)')
+parser.add_argument('--num_steps', type=int, default=1000000, metavar='N',
+                    help='maximum number of steps (default: 1000000)')
+parser.add_argument('--hidden_size', type=int, default=256, metavar='N',
+                    help='hidden size (default: 256)')
+parser.add_argument('--updates_per_step', type=int, default=1, metavar='N',
+                    help='model updates per simulator step (default: 1)')
+parser.add_argument('--target_update_interval', type=int, default=1, metavar='N',
+                    help='Value target update per no. of updates per step (default: 1)')
+parser.add_argument('--replay_size', type=int, default=1000000, metavar='N',
+                    help='size of replay buffer (default: 10000000)')
+args = parser.parse_args()
 
-    avg_reward /= eval_episodes
+# Environment
+# env = NormalizedActions(gym.make(args.env_name))
+env = ManipStationEnvironment(is_visualizing=False)
+env.seed(args.seed)
+torch.manual_seed(args.seed)
+np.random.seed(args.seed)
 
-    print("---------------------------------------")
-    print("Evaluation over %d episodes: %f" % (eval_episodes, avg_reward))
-    print("---------------------------------------")
-    return avg_reward
+# Agent
+state_dim = env.state_dim
+action_space = env.action_space
+max_action = float(env.action_space.high[0])
 
+agent = SAC(state_dim, action_space, max_action, args)
 
-if __name__ == "__main__":
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--policy_name", default="TD3")                 # Policy name
-    # parser.add_argument("--env_name", default="HalfCheetah-v1")           # OpenAI gym environment name
-    parser.add_argument("--seed", default=0, type=int)                  # Sets Gym, PyTorch and Numpy seeds
-    parser.add_argument("--start_timesteps", default=1e4, type=int)     # How many time steps purely random policy is run for
-    parser.add_argument("--eval_freq", default=3.75e4, type=float)         # How often (time steps) we evaluate
-    parser.add_argument("--max_timesteps", default=1e6, type=float)     # Max time steps to run environment for
-    parser.add_argument("--save_models", action="store_true", 
-        default=True)                                                   # Whether or not models are saved
-    parser.add_argument("--expl_noise", default=0.1, type=float)        # Std of Gaussian exploration noise
-    parser.add_argument("--batch_size", default=100, type=int)          # Batch size for both actor and critic
-    parser.add_argument("--discount", default=0.99, type=float)         # Discount factor
-    parser.add_argument("--tau", default=0.005, type=float)             # Target network update rate
-    parser.add_argument("--policy_noise", default=0.2, type=float)      # Noise added to target policy during critic update
-    parser.add_argument("--noise_clip", default=0.5, type=float)        # Range to clip target policy noise
-    parser.add_argument("--policy_freq", default=2, type=int)           # Frequency of delayed policy updates
-    parser.add_argument("--visualize", action="store_true")             # Visualize in meshcat (requires meshcat-server)
-    parser.add_argument("--load", action="store_true")                  # If loading from previous models
-    parser.add_argument("--load_timestep", default=0, type=int)
-    parser.add_argument("--load_ep", default=0, type=int)
-    args = parser.parse_args()
+# writer = SummaryWriter()
 
-    args.env_name = "ManipStation"
+# Memory
+memory = ReplayMemory(args.replay_size)
 
-    file_name = "%s_%s_%s" % (args.policy_name, args.env_name, str(args.seed))
-    print("---------------------------------------")
-    print("Settings: %s" % (file_name))
-    print("---------------------------------------")
+# Training Loop
+rewards = []
+total_numsteps = 0
+updates = 0
 
-    if not os.path.exists("./results"):
-        os.makedirs("./results")
-    if args.save_models and not os.path.exists("./pytorch_models"):
-        os.makedirs("./pytorch_models")
+for i_episode in itertools.count():
+    state = env.reset()
 
-    # env = gym.make(args.env_name)
-
-    env = ManipStationEnvironment(is_visualizing=args.visualize)
-
-    # Set seeds
-    env.seed(args.seed)
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    
-    state_dim = env.state_dim
-    action_dim = env.action_space.shape[0] 
-    max_action = float(env.action_space.high[0])
-
-    # Initialize policy
-    if args.policy_name == "TD3": policy = TD3.TD3(state_dim, action_dim, max_action)
-    elif args.policy_name == "OurDDPG": policy = OurDDPG.DDPG(state_dim, action_dim, max_action)
-    elif args.policy_name == "DDPG": policy = DDPG.DDPG(state_dim, action_dim, max_action)
-
-    replay_buffer = utils.ReplayBuffer()
-    
-    # Evaluate untrained policy
-    # evaluations = [evaluate_policy(policy)]
-    rewards = [] 
-
-    total_timesteps = 0
-    timesteps_since_eval = 0
-    episode_num = 0
     episode_reward = 0
-    episode_timesteps = 0
-    done = True 
-    checkpoints = np.zeros(2)
+    while True:
+        action = agent.select_action(state)  # Sample action from policy
+        next_state, reward, done, _ = env.step(action)  # Step
+        mask = not done  # 1 for not done and 0 for done
+        memory.push(state, action, reward, next_state, mask)  # Append transition to memory
+        if len(memory) > args.batch_size:
+            for i in range(args.updates_per_step): # Number of updates per step in environment
+                # Sample a batch from memory
+                state_batch, action_batch, reward_batch, next_state_batch, mask_batch = memory.sample(args.batch_size)
+                # Update parameters of all the networks
+                value_loss, critic_1_loss, critic_2_loss, policy_loss = agent.update_parameters(state_batch, action_batch, 
+                                                                                                reward_batch, next_state_batch, 
+                                                                                                mask_batch, updates)
 
-    if args.load:
-        print("Loading file: %s" % file_name)
-        try:
-            policy.load(file_name, directory="./pytorch_models")
-            rewards = list(np.load("./results/%s.npy" % (file_name)))
-            checkpoints = np.load("./pytorch_models/%s_checkpoint.npy" % file_name)
-            try:
-                with open("./pytorch_models/{}_replay_buffer.pkl".format(file_name), 'rb') as input:
-                    replay_buffer = pickle.load(input)
-            except:
-                pass
-        except:
-            print("No file found")
-            exit()
-        total_timesteps = checkpoints[0]
-        episode_num = checkpoints[1]
+                # writer.add_scalar('loss/value', value_loss, updates)
+                # writer.add_scalar('loss/critic_1', critic_1_loss, updates)
+                # writer.add_scalar('loss/critic_2', critic_2_loss, updates)
+                # writer.add_scalar('loss/policy', policy_loss, updates)
+                updates += 1
 
-    print("Starting in 1 second...")
-    time.sleep(1)
-    print("Starting")
-
-    while total_timesteps < args.max_timesteps:
-        if done: 
-            rewards.append(episode_reward)
-            if total_timesteps != 0: 
-                print("Total T: %d Episode Num: %d Episode T: %d Reward: %f") % (total_timesteps, episode_num, episode_timesteps, episode_reward)
-                if args.policy_name == "TD3":
-                    policy.train(replay_buffer, episode_timesteps, args.batch_size, args.discount, args.tau, args.policy_noise, args.noise_clip, args.policy_freq)
-                else: 
-                    policy.train(replay_buffer, episode_timesteps, args.batch_size, args.discount, args.tau)
-            
-            # Save episode
-            if timesteps_since_eval >= args.eval_freq:
-                timesteps_since_eval %= args.eval_freq
-                # evaluations.append(evaluate_policy(policy))
-                print("Saving after episode %d" % episode_num)
-                if args.save_models: 
-                    policy.save(file_name, directory="./pytorch_models")
-                    checkpoints[0] = total_timesteps
-                    checkpoints[1] = episode_num
-                    np.save("./pytorch_models/%s_checkpoint" % file_name, checkpoints) 
-                    with open("./pytorch_models/{}_replay_buffer.pkl".format(file_name), 'wb') as output:
-                        pickle.dump(replay_buffer, output, -1)
-                np.save("./results/%s" % (file_name), rewards) 
-            
-            # Reset environment
-            obs = env.reset()
-            done = False
-            episode_reward = 0
-            episode_timesteps = 0
-            episode_num += 1 
-        
-        # Select action randomly or according to policy
-        if total_timesteps < args.start_timesteps:
-            action = env.action_space.sample()
-        else:
-            action = policy.select_action(np.array(obs))
-            if args.expl_noise != 0: 
-                action = (action + np.random.normal(0, args.expl_noise, size=env.action_space.shape[0])).clip(env.action_space.low, env.action_space.high)
-
-        # Perform action
-        new_obs, reward, done, _ = env.step(action) 
-        done_bool = 0 if episode_timesteps + 1 == env._max_episode_steps else float(done)
+        state = next_state
+        total_numsteps += 1
         episode_reward += reward
 
-        # Store data in replay buffer
-        replay_buffer.add((obs, new_obs, action, reward, done_bool))
+        if done:
+            break
 
-        obs = new_obs
+    if total_numsteps > args.num_steps:
+        break
 
-        episode_timesteps += 1
-        total_timesteps += 1
-        timesteps_since_eval += 1
-        
-    # Final evaluation 
-    evaluations.append(evaluate_policy(policy))
-    if args.save_models: policy.save("%s" % (file_name), directory="./pytorch_models")
-    np.save("./results/%s_final_eval" % (file_name), evaluations)  
+    # writer.add_scalar('reward/train', episode_reward, i_episode)
+    rewards.append(episode_reward)
+    print("Episode: {}, total numsteps: {}, reward: {}, average reward: {}".format(i_episode, total_numsteps, np.round(rewards[-1],2),
+                                                                                np.round(np.mean(rewards[-100:]),2)))
+
+env.close()
