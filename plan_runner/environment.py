@@ -116,8 +116,7 @@ class ManipStationEnvironment(object):
         
         # Set initial state of the robot
         self.reset_sim = False
-        return self.reset()
-
+        self.reset()
 
     def step(self, action):
         assert len(action) == 8
@@ -149,7 +148,7 @@ class ManipStationEnvironment(object):
 
         if self.reset_sim:
             print("Resetting")
-            return self.build(real_time_rate=self.real_time_rate, is_visualizing=self.is_visualizing)
+            self.build(real_time_rate=self.real_time_rate, is_visualizing=self.is_visualizing)
 
         while True:
             p_WQ_new = np.random.uniform(low=[0.05, -0.1, 0.5], high=[0.5, 0.1, 0.5])
