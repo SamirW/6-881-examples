@@ -49,6 +49,9 @@ if __name__ == "__main__":
 	parser.add_argument("--noise_clip", default=0.5, type=float)		# Range to clip target policy noise
 	parser.add_argument("--policy_freq", default=2, type=int)			# Frequency of delayed policy updates
 	parser.add_argument("--visualize", action="store_true")				# Visualize in meshcat (requires meshcat-server)
+	parser.add_argument("--load", action="store_true")					# If loading from previous models
+	parser.add_argument("--load_timestep", default=0, type=int)
+	parser.add_argument("--load_ep", default=0, type=int)
 	args = parser.parse_args()
 
 	args.env_name = "ManipStation"
@@ -75,13 +78,9 @@ if __name__ == "__main__":
 	torch.manual_seed(args.seed)
 	np.random.seed(args.seed)
 	
-	# state_dim = env.observation_space.shape[0]
+	state_dim = env.state_dim
 	action_dim = env.action_space.shape[0] 
 	max_action = float(env.action_space.high[0])
-
-	state_dim = env.state_dim
-	# action_dim = env.action_dim
-	# max_action = env.max_action
 
 	# Initialize policy
 	if args.policy_name == "TD3": policy = TD3.TD3(state_dim, action_dim, max_action)
@@ -99,6 +98,11 @@ if __name__ == "__main__":
 	episode_num = 0
 	episode_reward = 0
 	done = True 
+
+	if args.load:
+		policy.load(file_name, directory="./pytorch_models")
+		total_timesteps = args.load_timestep
+		episode_num = args.load_ep
 
 	while total_timesteps < args.max_timesteps:
 		if done: 
