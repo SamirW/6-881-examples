@@ -7,3 +7,4 @@
 *.pdf
 *.gz
 perception/saved_point_clouds/*.npy
+*.pkl

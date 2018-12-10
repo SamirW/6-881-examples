@@ -139,7 +139,7 @@ if __name__ == "__main__":
                     policy.save(file_name, directory="./pytorch_models")
                     checkpoints[0] = total_timesteps
                     checkpoints[1] = episode_num
-                    np.save("./pytorch_models/%s_checkpoint.npy" % file_name, checkpoints) 
+                    np.save("./pytorch_models/%s_checkpoint" % file_name, checkpoints) 
                     with open("./pytorch_models/{}_replay_buffer.pkl".format(file_name), 'wb') as output:
                         pickle.dump(replay_buffer, output, -1)
                 np.save("./results/%s" % (file_name), rewards) 

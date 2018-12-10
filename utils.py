@@ -5,7 +5,7 @@ import numpy as np
 
 # Expects tuples of (state, next_state, action, reward, done)
 class ReplayBuffer(object):
-	def __init__(self, max_size=1e6):
+	def __init__(self, max_size=1e5):
 		self.storage = []
 		self.max_size = max_size
 		self.ptr = 0
