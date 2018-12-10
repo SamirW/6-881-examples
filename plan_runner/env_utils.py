@@ -138,6 +138,38 @@ def GetHomeConfiguration(is_printing=False):
         print result
     return prog.GetSolution(ik_scene.q())
 
+def GetConfiguration(p_WQ_home, is_printing=False):
+    """
+    Returns a configuration of the MultibodyPlant in which point Q (defined by global variable p_EQ)
+    in robot EE frame is at p_WQ_home, and orientation of frame Ea is R_WEa_ref.
+    """
+    # get "home" pose
+    ik_scene = inverse_kinematics.InverseKinematics(plant)
+
+    theta_bound = 0.005 * np.pi # 0.9 degrees
+    X_EEa = GetEndEffectorWorldAlignedFrame()
+    R_EEa = RotationMatrix(X_EEa.rotation())
+
+    ik_scene.AddOrientationConstraint(
+        frameAbar=world_frame, R_AbarA=R_WEa_ref,
+        frameBbar=gripper_frame, R_BbarB=R_EEa,
+        theta_bound=theta_bound)
+
+    p_WQ0 = p_WQ_home
+    p_WQ_lower = p_WQ0 - 0.01
+    p_WQ_upper = p_WQ0 + 0.01
+    ik_scene.AddPositionConstraint(
+        frameB=gripper_frame, p_BQ=p_EQ,
+        frameA=world_frame,
+        p_AQ_lower=p_WQ_lower, p_AQ_upper=p_WQ_upper)
+
+    prog = ik_scene.prog()
+    prog.SetInitialGuess(ik_scene.q(), np.zeros(plant.num_positions()))
+    result = prog.Solve()
+    if is_printing:
+        print result
+    return (result==False), prog.GetSolution(ik_scene.q())
+
 def InterpolateStraightLine(p_WQ_start, p_WQ_end, num_knot_points, i):
         return (p_WQ_end - p_WQ_start)/num_knot_points*(i+1) + p_WQ_start
 

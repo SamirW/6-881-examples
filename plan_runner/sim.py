@@ -199,25 +199,27 @@ import time
 
 from environment import ManipStationEnvironment
 
-env = ManipStationEnvironment(is_visualizing=False)
+env = ManipStationEnvironment(is_visualizing=True)
+import numpy as np
+# action_1 = [0, 0, 0, 0, 0, -0.2, 0, 0.05]
+action_1 = np.zeros(8)
+# action_1_rev = [0,0,0,0,0,0.2,0,0.05]
+# action_2 = [0, 0, 0, -0.1, 0, 0, 0, 0.05]
+# close_grip = [0, 0, 0, 0, 0, 0, 0, 0]
 
-action_1 = [0, 0, 0, 0, 0, -0.2, 0, 0.05]
-action_1_rev = [0,0,0,0,0,0.2,0,0.05]
-action_2 = [0, 0, 0, -0.1, 0, 0, 0, 0.05]
-close_grip = [0, 0, 0, 0, 0, 0, 0, 0]
+# print("starting")
 
-print("starting")
+# time_start = time.time()
 
-time_start = time.time()
+for i in range(1):
+	env.reset()
+	for j in range(5):
+		env.step(action_1)
 
-for i in range(5):
-    for i in range(10):
-        obs, rew = env.step(action_1)
+#     for i in range(10):
+#         env.step(action_1_rev)
 
-    for i in range(10):
-        env.step(action_1_rev)
+# time_end = time.time()
 
-time_end = time.time()
-
-print(env.plan_scheduler.end_time)
-print(time_end - time_start)
+# print(env.plan_scheduler.end_time)
+# print(time_end - time_start)

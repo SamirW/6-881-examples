@@ -19,7 +19,7 @@ from plan_runner.plan_utils import *
 
 X_WObject_default = Isometry3.Identity()
 X_WObject_default.set_translation([.6, 0, 0])
-
+# X_WObject_default.set_translation([0.5, 0, 0.4])
 
 class ManipulationStationSimulator:
     def __init__(self, time_step,
@@ -40,12 +40,16 @@ class ManipulationStationSimulator:
                 plant=self.station.get_mutable_multibody_plant(),
                 scene_graph=self.station.get_mutable_scene_graph() )
         self.station.Finalize()
+        self.tree = self.plant.tree()
 
         self.simulator = None
         self.plan_runner = None
 
         # Initial pose of the object
         self.X_WObject = X_WObject
+
+    def SetObjectTranslation(self, translation):
+        self.X_WObject.set_translation(translation)
 
     def RunSimulation(self, plan_list, gripper_setpoint_list,
                       extra_time=0, real_time_rate=1.0, q0_kuka=np.zeros(7), is_visualizing=True, sim_duration=None,
@@ -107,7 +111,7 @@ class ManipulationStationSimulator:
         if is_visualizing:
             scene_graph = self.station.get_mutable_scene_graph()
             viz = MeshcatVisualizer(scene_graph,
-                                    is_drawing_contact_force = True,
+                                    is_drawing_contact_force = False,
                                     plant = self.plant)
             builder.AddSystem(viz)
             builder.Connect(self.station.GetOutputPort("pose_bundle"),
@@ -156,11 +160,11 @@ class ManipulationStationSimulator:
         # with small contact forces between the door and the cupboard body.
         left_hinge_joint = self.plant.GetJointByName("left_door_hinge")
         left_hinge_joint.set_angle(
-            context=self.station.GetMutableSubsystemContext(self.plant, context), angle=-0.001)
+            context=self.station.GetMutableSubsystemContext(self.plant, context), angle=-np.pi/2+0.001)
 
         right_hinge_joint = self.plant.GetJointByName("right_door_hinge")
         right_hinge_joint.set_angle(
-            context=self.station.GetMutableSubsystemContext(self.plant, context), angle=0.001)
+            context=self.station.GetMutableSubsystemContext(self.plant, context), angle=np.pi/2-0.001)
 
         # set initial pose of the object
         if self.object_base_link_name is not None:

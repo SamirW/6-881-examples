@@ -17,7 +17,6 @@ from env_utils import *
 
 object_file_path = FindResourceOrThrow(
     "drake/examples/manipulation_station/models/061_foam_brick.sdf")
-q0_kuka = [0, 0, 0, -1.75, 0, 1.0, 0]
 
 class ManipStationEnvironment(object):
     def __init__(self, real_time_rate=0, is_visualizing=False):
@@ -64,13 +63,13 @@ class ManipStationEnvironment(object):
         if is_visualizing:
             scene_graph = self.manip_station_sim.station.get_mutable_scene_graph()
             viz = MeshcatVisualizer(scene_graph,
-                                    is_drawing_contact_force = True,
+                                    is_drawing_contact_force = False,
                                     plant = self.manip_station_sim.plant)
             builder.AddSystem(viz)
             builder.Connect(self.manip_station_sim.station.GetOutputPort("pose_bundle"),
                             viz.GetInputPort("lcm_visualization"))
-            builder.Connect(self.manip_station_sim.station.GetOutputPort("contact_results"),
-                            viz.GetInputPort("contact_results"))
+            # builder.Connect(self.manip_station_sim.station.GetOutputPort("contact_results"),
+                            # viz.GetInputPort("contact_results"))
 
         # Build diagram
         self.diagram = builder.Build()
@@ -92,6 +91,9 @@ class ManipStationEnvironment(object):
         self.left_hinge_joint = self.manip_station_sim.plant.GetJointByName("left_door_hinge")
         self.right_hinge_joint = self.manip_station_sim.plant.GetJointByName("right_door_hinge")
         
+        # Goal for training
+        self.goal_position = np.array([0.85, 0, 0.31])
+
         # Set initial state of the robot
         self.reset()
 
@@ -101,16 +103,19 @@ class ManipStationEnvironment(object):
         self.state_dim = self._getObservation().shape[0]
         self._episode_steps = 0
         self._max_episode_steps = 75
+        self.obj = self.manip_station_sim.plant.GetBodyByName(self.manip_station_sim.object_base_link_name, self.manip_station_sim.object)
 
     def step(self, action):
         assert len(action) == 8
         next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.1)
 
-        sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
+        # sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
+        sim_duration = self.plan_scheduler.setNextPlan(next_plan, 0)
+
         try:
             self.simulator.StepTo(sim_duration)
         except:
-            return None, -999, True, None
+            return self._getObservation(), -999, True, None
 
         self._episode_steps += 1
         if self._episode_steps == self._max_episode_steps:
@@ -121,26 +126,34 @@ class ManipStationEnvironment(object):
         return self._getObservation(), self._getReward(), done, None
 
     def reset(self):
-        # set initial state of the robot
-        self.manip_station_sim.station.SetIiwaPosition(q0_kuka, self.context)
-        self.manip_station_sim.station.SetIiwaVelocity(np.zeros(7), self.context)
-        self.manip_station_sim.station.SetWsgPosition(0.05, self.context)
-        self.manip_station_sim.station.SetWsgVelocity(0, self.context)
+        while True:
+            p_WQ_new = np.random.uniform(low=[0.05, -0.1, 0.5], high=[0.5, 0.1, 0.5])
+            passed, q_home_full = GetConfiguration(p_WQ_new)
+            if passed:
+                break
+        q_home_kuka = GetKukaQKnots(q_home_full)[0]
 
         # set initial hinge angles of the cupboard.
         # setting hinge angle to exactly 0 or 90 degrees will result in intermittent contact
         # with small contact forces between the door and the cupboard body.
         self.left_hinge_joint.set_angle(
-            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=-0.1)
+            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=-np.pi/2+0.001)
 
         self.right_hinge_joint.set_angle(
-            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=0.001)
+            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=np.pi/2-0.001)
 
         # set initial pose of the object
+        self.manip_station_sim.SetObjectTranslation(p_WQ_new+np.array([0.01,0,-0.022]))
         if self.manip_station_sim.object_base_link_name is not None:
-            self.manip_station_sim.plant.tree().SetFreeBodyPoseOrThrow(
+            self.manip_station_sim.tree.SetFreeBodyPoseOrThrow(
                self.manip_station_sim.plant.GetBodyByName(self.manip_station_sim.object_base_link_name, self.manip_station_sim.object),
                 self.manip_station_sim.X_WObject, self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context))
+
+        # set initial state of the robot
+        self.manip_station_sim.station.SetIiwaPosition(q_home_kuka, self.context)
+        self.manip_station_sim.station.SetIiwaVelocity(np.zeros(7), self.context)
+        self.manip_station_sim.station.SetWsgPosition(0.02, self.context)
+        self.manip_station_sim.station.SetWsgVelocity(0, self.context)
 
         self.simulator.Initialize()
 
@@ -149,7 +162,7 @@ class ManipStationEnvironment(object):
         return self._getObservation()
 
     def seed(self, seed):
-        pass
+        np.random.seed(seed)
 
     def _getObservation(self):
         kuka_position = self.manip_station_sim.station.GetIiwaPosition(self.context)
@@ -158,6 +171,8 @@ class ManipStationEnvironment(object):
         return np.append(kuka_position, left_door_hinge_position)
 
     def _getReward(self):
-        left_door_hinge_position = self.left_hinge_joint.get_angle(
-            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context))
-        return -1*(np.pi/2) - left_door_hinge_position
+        object_position = self.manip_station_sim.tree.EvalBodyPoseInWorld(
+            context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context),
+            body=self.obj).translation()
+        dist = np.linalg.norm(self.goal_position-object_position)
+        return -dist
