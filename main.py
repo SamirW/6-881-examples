@@ -97,12 +97,14 @@ if __name__ == "__main__":
     episode_reward = 0
     episode_timesteps = 0
     done = True 
+    checkpoints = np.zeros(2)
 
     if args.load:
         print("Loading file: %s" % file_name)
         try:
             policy.load(file_name, directory="./pytorch_models")
             rewards = list(np.load("./results/%s.npy" % (file_name)))
+            checkpoints = np.load("./pytorch_models/%s_checkpoint.npy" % file_name)
             try:
                 with open("./pytorch_models/{}_replay_buffer.pkl".format(file_name), 'rb') as input:
                     replay_buffer = pickle.load(input)
@@ -111,8 +113,8 @@ if __name__ == "__main__":
         except:
             print("No file found")
             exit()
-        total_timesteps = args.load_timestep
-        episode_num = args.load_ep
+        total_timesteps = checkpoints[0]
+        episode_num = checkpoints[1]
 
     print("Starting in 1 second...")
     time.sleep(1)
@@ -135,6 +137,9 @@ if __name__ == "__main__":
                 print("Saving after episode %d" % episode_num)
                 if args.save_models: 
                     policy.save(file_name, directory="./pytorch_models")
+                    checkpoints[0] = total_timesteps
+                    checkpoints[1] = episode_num
+                    np.save("./pytorch_models/%s_checkpoint.npy" % file_name, checkpoints) 
                     with open("./pytorch_models/{}_replay_buffer.pkl".format(file_name), 'wb') as output:
                         pickle.dump(replay_buffer, output, -1)
                 np.save("./results/%s" % (file_name), rewards) 
