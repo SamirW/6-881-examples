@@ -102,7 +102,7 @@ if __name__ == "__main__":
         print("Loading file: %s" % file_name)
         try:
             policy.load(file_name, directory="./pytorch_models")
-            rewards = np.load("./results/%s" % (file_name))
+            rewards = list(np.load("./results/%s.npy" % (file_name)))
             try:
                 with open("./pytorch_models/{}_replay_buffer.pkl".format(file_name), 'rb') as input:
                     replay_buffer = pickle.load(input)
