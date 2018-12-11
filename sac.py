@@ -10,7 +10,7 @@ from model import GaussianPolicy, QNetwork, ValueNetwork, DeterministicPolicy
 
 class SAC(object):
     def __init__(self, num_inputs, action_space, max_action, args):
-
+        
         self.num_inputs = num_inputs
         self.action_space = action_space.shape[0]
         self.gamma = args.gamma
@@ -50,7 +50,7 @@ class SAC(object):
             self.policy.eval()
             _, _, _, action, _ = self.policy.evaluate(state)
 
-        #action = torch.tanh(action)
+        # action = torch.tanh(action)
         action = action.detach().cpu().numpy()
         return action[0]
 
