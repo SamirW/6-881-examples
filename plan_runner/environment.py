@@ -123,7 +123,7 @@ class ManipStationEnvironment(object):
         next_plan = JointSpacePlanRelative(delta_q=action[:-1], duration=0.1)
 
         # sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
-        sim_duration = self.plan_scheduler.setNextPlan(next_plan, action[-1])
+        sim_duration = self.plan_scheduler.setNextPlan(next_plan, 0.05)
 
         try:
             self.simulator.StepTo(sim_duration)
@@ -169,7 +169,7 @@ class ManipStationEnvironment(object):
             context=self.manip_station_sim.station.GetMutableSubsystemContext(self.manip_station_sim.plant, self.context), angle=np.pi/2-0.001)
 
         # set initial pose of the object
-        # self.manip_station_sim.SetObjectTranslation(p_WQ_new+np.array([0.01,0,-0.022]))
+        self.manip_station_sim.SetObjectTranslation(self.goal_position)
         if self.manip_station_sim.object_base_link_name is not None:
             self.manip_station_sim.tree.SetFreeBodyPoseOrThrow(
                self.manip_station_sim.plant.GetBodyByName(self.manip_station_sim.object_base_link_name, self.manip_station_sim.object),
